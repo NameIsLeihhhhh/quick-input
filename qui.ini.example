@@ -1,0 +1,36 @@
+; QuickInput 配置
+; Hotkey 支持写法：Alt+J  Ctrl+Alt+J  Win+Space  Shift+Alt+K  F9
+Hotkey=Alt+J
+
+; 内容送到哪里：
+;   new       = DSH 新会话（默认，不切窗口、不抢焦点）
+;   current   = 追加到你正在看的那个会话
+;   clipboard = 老办法：粘贴到当前窗口
+Mode=new
+
+; ↓ 以下三项只有 Mode=clipboard 时才用得到
+FocusDelay=180
+PasteDelay=130
+NewSession=0
+NewSessionX=784
+NewSessionY=550
+NewSessionWait=700
+
+; ─────────────────────────────────────────────
+; 搜索别名：Alt+Q → 输入「别名 空格 关键词」→ 回车
+; 格式：别名 = 显示名 | 网址模板（{q} 会被替换成搜索词）
+; 显示名可省略；模板里必须有 {q}，没有的行会被忽略。
+; 想强行把某段字发进 DSH（不当搜索），行首加一个反斜杠 \ 即可。
+; 加一个站点只要加一行，存盘后重启程序生效（不用重新编译）。
+; ─────────────────────────────────────────────
+[search]
+hh    = 小红书 | https://www.xiaohongshu.com/search_result?keyword={q}
+bb    = B站    | https://search.bilibili.com/all?keyword={q}
+dd    = 抖音   | https://www.douyin.com/search/{q}
+gg    = Google | https://www.google.com/search?q={q}
+zh    = 知乎   | https://www.zhihu.com/search?type=content&q={q}
+wb    = 微博   | https://s.weibo.com/weibo?q={q}
+db    = 豆瓣   | https://www.douban.com/search?q={q}
+tb    = 淘宝   | https://s.taobao.com/search?q={q}
+bd    = 百度   | https://www.baidu.com/s?wd={q}
+gh    = GitHub | https://github.com/search?q={q}

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 340px;
+    background: #0f141b;
+    color: #e6edf3;
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    font-size: 12px;
+    padding: 14px;
+  }
+  h1 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #c9d4e0;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #4a5563;
+    flex: 0 0 auto;
+  }
+  .dot.ok { background: #3fb950; box-shadow: 0 0 6px rgba(63,185,80,.6); }
+  .dot.bad { background: #d29922; box-shadow: 0 0 6px rgba(210,153,34,.6); }
+
+  .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid #1a222c;
+    line-height: 1.5;
+  }
+  .row:last-of-type { border-bottom: none; }
+  .k { color: #6e7a89; flex: 0 0 auto; }
+  .v { color: #b9c6d4; text-align: right; word-break: break-all; }
+
+  .box {
+    margin-top: 12px;
+    padding: 9px 10px;
+    border-radius: 7px;
+    background: #131a23;
+    border: 1px solid #1f2833;
+    color: #8b96a5;
+    line-height: 1.6;
+    font-size: 11px;
+  }
+  .box b { color: #b9c6d4; font-weight: 600; }
+
+  .actions {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+  }
+  button {
+    flex: 1;
+    padding: 8px 10px;
+    border-radius: 7px;
+    border: 1px solid #2a3543;
+    background: #161d27;
+    color: #c9d4e0;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: .18s;
+  }
+  button:hover { background: #1d2633; border-color: #3a4757; color: #fff; }
+  button.primary { background: #17416e; border-color: #255c97; color: #d6e8ff; }
+  button.primary:hover { background: #1c4f85; }
+  button:disabled { opacity: .45; cursor: default; }
+
+  #out {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #7d8896;
+    min-height: 16px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+  <h1><span class="dot" id="dot"></span>DSH Quick Bridge</h1>
+
+  <div class="row"><span class="k">状态</span><span class="v" id="v-state">读取中…</span></div>
+  <div class="row"><span class="k">最近一次</span><span class="v" id="v-time">—</span></div>
+  <div class="row"><span class="k">DSH 标签页</span><span class="v" id="v-tabs">—</span></div>
+
+  <div class="box">
+    用法：在任何软件里按 <b>Alt+Q</b>，输入内容回车。<br>
+    内容会自己进 DSH 的新会话，当前窗口不动。
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="btn-test">发一条测试</button>
+    <button id="btn-probe">探测页面</button>
+  </div>
+
+  <div id="out"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

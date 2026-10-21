@@ -1,0 +1,11 @@
+# 编译产物
+*.exe
+*.pdb
+*.log
+
+# voidtools 的 Everything SDK：受它自己的许可约束，不随本仓分发。
+# 用之前请从你自己的 Everything 安装目录拷一份过来（见 README「文件搜索」一节）。
+Everything64.dll
+
+# 你自己的配置（仓里给的是 qui.ini.example）
+qui.ini
