@@ -1,0 +1,9 @@
+# keep Windows sources checked out with CRLF, images untouched
+*.png binary
+*.ico binary
+*.exe binary
+*.ps1 text eol=crlf
+*.cs  text eol=crlf
+*.md  text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
