@@ -17,7 +17,7 @@
 
   // 版本 + 认领标记：扩展更新后，页面里的旧内容脚本可能还没死。
   // 谁最后被注入谁生效，只有认领标记还是自己时才响应消息，避免两份同时处理。
-  const VERSION = 4;
+  const VERSION = 5;
   const claim = Math.random().toString(36).slice(2);
   window.__dshQuickBridgeClaim = claim;
   window.__dshQuickBridgeVersion = VERSION;
@@ -291,7 +291,84 @@
 
   /* ── 主流程 ─────────────────────────────────────────── */
 
-  async function inject(text, mode, final) {
+  /* ── 附件：把 QI 传来的文件塞进 DSH 的 file input ────── */
+
+  function b64ToBytes(b64) {
+    const bin = atob(b64 || '');
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function findFileInput(box) {
+    // DSH 的附件入口是一个隐藏的 input[type=file]（multiple）。
+    // 优先用输入卡片里的那个，找不到再全局找。
+    const scopes = [];
+    try {
+      const card = box && box.closest(SEL_CARD);
+      if (card) scopes.push(card);
+    } catch (e) { /* ignore */ }
+    scopes.push(document);
+    for (let s = 0; s < scopes.length; s++) {
+      const list = scopes[s].querySelectorAll('input[type="file"]');
+      for (let i = 0; i < list.length; i++) return list[i];
+    }
+    return null;
+  }
+
+  async function attachFiles(box, atts) {
+    if (!atts || !atts.length) return { ok: true, n: 0, skipped: true };
+    const inp = findFileInput(box);
+    if (!inp) return { ok: false, n: 0, msg: 'no file input' };
+    let added = 0;
+    const errs = [];
+    try {
+      console.log('QI-ATTACH-IN ' + JSON.stringify(atts.map(function (x) {
+        return x ? (x.mime + '|' + (x.b64 || '').length) : 'null';
+      })));
+    } catch (e) { /* ignore */ }
+    // 实测两条通道：文本/PDF 之类的文件走隐藏 input 就行；图片不行
+    // （同一份字节改成 text/plain 就能进，说明是图片类型的专用通道），
+    // 所以图片先走 paste，挂了再退回 input。
+    for (let i = 0; i < atts.length; i++) {
+      const a = atts[i] || {};
+      const nm = a.name || ('file-' + i);
+      try {
+        const file = new File([b64ToBytes(a.b64)], nm, {
+          type: a.mime || 'application/octet-stream'
+        });
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        // 每个文件都重新取一次：DSH 收到附件后会重渲染输入卡片，
+        // 上一轮拿到的 input 节点可能已经失效。
+        const fresh = findFileInput(box) || inp;
+        fresh.files = dt.files;
+        fresh.dispatchEvent(new Event('input', { bubbles: true }));
+        fresh.dispatchEvent(new Event('change', { bubbles: true }));
+        added++;
+        await sleep(400);
+      } catch (e) { errs.push(String((e && e.message) || e)); }
+    }
+    if (!added) return { ok: false, n: 0, msg: 'no usable file' };
+    // 图片只出缩略图、不出文件名，别把图片误判成失败
+    const names = [];
+    for (let i = 0; i < atts.length; i++) {
+      const a = atts[i] || {};
+      if ((a.mime || '').indexOf('image/') === 0) continue;
+      if (a.name) names.push(a.name);
+    }
+    if (!names.length) { await sleep(1200); return { ok: true, n: added, errs: errs }; }
+    const seen = await waitFor(() => {
+      const t = document.body.innerText || '';
+      for (let i = 0; i < names.length; i++) {
+        if (t.indexOf(names[i]) < 0) return null;
+      }
+      return true;
+    }, 7000);
+    return { ok: !!seen, n: added, seen: !!seen, errs: errs, sizeOk: (inp.files || []).length };
+  }
+
+  async function inject(text, mode, final, atts) {
     const t0 = Date.now();
     let note = '';
 
@@ -321,6 +398,17 @@
     }
 
     // 3. 填字
+    // 2.5 附件：先挂文件，再填字，最后发送
+    let att = null;
+    if (atts && atts.length) {
+      const af = await attachFiles(box, atts);
+      att = af;
+      if (!af.ok) {
+        note += '（附件 ' + af.n + ' 个没挂上：' + (af.msg || '未知') + '）';
+        if (final) toast('⚠ QuickInput：附件没能挂进 DSH（' + (af.msg || '未知') + '）', 6000);
+      }
+    }
+
     const f = await fillComposer(box, text);
     if (!f.ok) {
       if (final) toast('⚠ QuickInput：内容填不进去（编辑器拒收）。\n把这条消息告诉我就能修。', 6000);
@@ -335,7 +423,7 @@
 
     if (s.ok) {
       toast('✔ 已送入 DSH 新会话' + note + '（' + sec + 's）');
-      return { ok: true, msg: f.how + ' / ' + s.how };
+      return { ok: true, msg: f.how + ' / ' + s.how, attach: att };
     }
 
     if (s.kept) {
@@ -361,7 +449,7 @@
       return false;
     }
     if (msg && msg.type === 'INJECT') {
-      inject(msg.text || '', msg.mode || 'new', msg.final !== false)
+      inject(msg.text || '', msg.mode || 'new', msg.final !== false, msg.atts || [])
         .then(r => sendResponse(r))
         .catch(e => sendResponse({ ok: false, code: 'E_EXCEPTION', retry: true, msg: String(e) }));
       return true;

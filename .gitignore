@@ -3,6 +3,7 @@
 _patch-*.ps1
 _probe-plugin/
 _shots*/
+*.bat
+*.zip
 qui.ini
 Thumbs.db
-*.bat

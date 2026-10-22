@@ -8,7 +8,7 @@ const BRIDGE = 'http://127.0.0.1:47321';
 const DSH_URLS = ['http://127.0.0.1:3080/*', 'http://localhost:3080/*'];
 const DSH_HOME = 'http://127.0.0.1:3080/';
 const POLL_MS = 700;
-const CONTENT_VERSION = 4;
+const CONTENT_VERSION = 5;
 const MAX_ATTEMPTS = 3;
 
 let loopTimer = null;
@@ -119,6 +119,7 @@ async function deliver(item, attempt) {
         type: 'INJECT',
         text: item.text,
         mode: item.mode || 'new',
+        atts: Array.isArray(item.atts) ? item.atts : [],
         final: attempt >= MAX_ATTEMPTS
       }),
       sleep(wait).then(() => ({ ok: false, retry: true, msg: '页面 ' + (wait / 1000) + ' 秒没回应' }))
@@ -159,7 +160,7 @@ async function deliverWithRetry(item) {
 async function pollOnce() {
   let res;
   try {
-    res = await fetch(BRIDGE + '/poll?v=4', { cache: 'no-store' });
+    res = await fetch(BRIDGE + '/poll?v=5', { cache: 'no-store' });
   } catch (e) {
     await setState(false, '本地桥没连上，QuickInput 在运行吗？');
     return;

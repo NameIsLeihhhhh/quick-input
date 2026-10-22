@@ -228,11 +228,11 @@ curl "http://127.0.0.1:47321/debugfiles"
 | `qui.ini` | 配置（热键、模式、搜索别名） |
 | `QuickInput.cs` | 源码 |
 | `QuickInput.ico` | 托盘/exe 图标源文件（9 个尺寸），编译时打进 exe |
-| `icon-preview.png` | 图标各尺寸的预览图 |
-| `Everything64.dll` | Everything 的 SDK，给文件搜索用（跟 exe 放一起就行） |
+| `Everything64.dll` | Everything 的 SDK，给文件搜索用（跟 exe 放一起就行，仓库里不带） |
 | `build.ps1` | 改完源码后重新编译 |
-| `selftest.ps1` | 自检脚本（只覆盖 clipboard 模式） |
-| `selftest-all.ps1` | **全链路自测，28 项，推荐用这个** |
+| `selftest-all.ps1` | **全链路自测，31 项，一条命令跑完** |
+| `extension/` | Chrome 扩展（本地桥的另一半）。`chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → 选这个目录 |
+| `publish.ps1` | 维护者用：把可发布的文件同步到仓库目录并提交 |
 
 重新编译：
 
