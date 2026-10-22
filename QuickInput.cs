@@ -481,7 +481,85 @@ public static string LastNote = "";
 
  // 启动时试跑一次：既验证 DLL 能加载，也验证 Everything 的 IPC 通
 
-public static void Probe()
+ public static string[] _scopeExcl = null;
+
+ // 文件搜索的作用域：只出文件（file:），并排掉系统/依赖路径（!"..."）。
+ // 实测：index 53,536 条 -> 573 条，19 个槽位从「全是文件夹」变成「全是文件」。
+ public static string[] ScopeExclude()
+ {
+  if (_scopeExcl != null) return _scopeExcl;
+  List<string> l = new List<string>();
+  l.Add("\\Windows\\");
+  l.Add("\\ProgramData\\");
+  l.Add(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "\\");
+  l.Add(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\");
+  l.Add("node_modules\\");
+  l.Add("Program Files\\");
+  l.Add("Program Files (x86)\\");
+  l.Add(".git\\");
+  l.Add("\\Docker\\");
+  l.Add("site-packages\\");
+  l.Add("__pycache__\\");
+  l.Add(".venv\\");
+  l.Add("\\venv\\");
+  l.Add(".nuget\\");
+  l.Add(".gradle\\");
+  l.Add("\\dist\\");
+  l.Add("\\build\\");
+  l.Add("\\obj\\");
+  l.Add(".obsidian\\plugins\\");
+  l.Add("\\Recycle.Bin\\");
+  _scopeExcl = l.ToArray();
+  return _scopeExcl;
+ }
+
+ public static List<FileHit> SortByNewest(List<FileHit> hits, int keep)
+ {
+  if (hits == null) return new List<FileHit>();
+  if (hits.Count > 1)
+  {
+   Dictionary<FileHit, DateTime> tm = new Dictionary<FileHit, DateTime>();
+   for (int i = 0; i < hits.Count; i++)
+   {
+    DateTime d;
+    try { d = File.GetLastWriteTimeUtc(hits[i].FullPath); }
+    catch { d = DateTime.MinValue; }
+    tm[hits[i]] = d;
+   }
+   hits.Sort(delegate(FileHit a, FileHit b)
+   {
+    int c = tm[b].CompareTo(tm[a]);
+    if (c != 0) return c;
+    return string.Compare(a.FullPath, b.FullPath, StringComparison.OrdinalIgnoreCase);
+   });
+  }
+  if (keep > 0 && hits.Count > keep) hits.RemoveRange(keep, hits.Count - keep);
+  return hits;
+ }
+
+ public static string ScopeQuery(string raw)
+ {
+  StringBuilder sb = new StringBuilder("file:");
+  sb.Append(raw == null ? "" : raw);
+  string[] ex = ScopeExclude();
+  for (int i = 0; i < ex.Length; i++)
+  {
+   sb.Append(" !\"");
+   sb.Append(ex[i]);
+   sb.Append('"');
+  }
+  return sb.ToString();
+ }
+
+ // 先按作用域查；一条都没有时退回原查询 —— 只匹配文件夹的词（比如项目目录名）仍然搜得到。
+ public static List<FileHit> QueryScoped(string raw, int max)
+ {
+  List<FileHit> hits = Query(ScopeQuery(raw), max);
+  if (hits.Count == 0 && raw != null && raw.Trim().Length > 0) hits = Query(raw, max);
+  return hits;
+ }
+
+ public static void Probe()
 
 {
 
@@ -1744,11 +1822,12 @@ int fn = QueryInt(query, "n");
 
 
 if (fn <= 0) fn = 10;
+ bool fscope = QueryStr(query, "scope") == "1";
 
 
 
 
- List<FileHit> hits = Everything.Query(fq, fn);
+ List<FileHit> hits = fscope ? Everything.SortByNewest(Everything.QueryScoped(fq, fn), fn) : Everything.Query(fq, fn);
 
 
 
@@ -3370,12 +3449,13 @@ private const int BASE_H = 80;
 private const int ROW_H = 30;
   // 每条结果的高度
 
-private const int MAX_ROWS = 4;
+private const int MAX_ROWS = 5;
 // 最多显示几条（少一点，占屏更轻）
 
  private readonly List<FileHit> _hits = new List<FileHit>();
 
 private int _sel = 0;
+ private int _wheelAcc = 0;   // 滚轮累计：不足一格（±120）的零头留到下一次，高精度滚轮也能一格一格走
 
 private int _top = 0;
    // 结果多于 MAX_ROWS 时，列表从第几条开始画
@@ -3981,6 +4061,9 @@ BackColor = C_BG;
 
 
 DoubleBuffered = true;
+  // 滚轮先过消息过滤器：焦点在输入框（multiline TextBox）时，WM_MOUSEWHEEL 会被它吃掉，
+  // 形式上表现就是「轻轻滑没反应，用力滑才动」。这里在分发之前截住，直接换算成选中项。
+  Application.AddMessageFilter(new WheelRouter(this));
 
 
 KeyPreview = true;
@@ -4586,6 +4669,7 @@ return;
 string q = _query;
 
 
+
 _searching = true;
 
 
@@ -4629,7 +4713,7 @@ long t0 = DateTime.Now.Ticks;
 
 
 
-hits = Everything.Query(q, 19);
+hits = Everything.SortByNewest(Everything.QueryScoped(q, 600), 200);
 
 
 
@@ -5748,7 +5832,7 @@ Rectangle wa = Screen.FromControl(this).WorkingArea;
 
 
 
-if (Top + Height > wa.Bottom) Top = Math.Max(wa.Top, wa.Bottom - Height);
+if (Top + Height > wa.Bottom) if (!_topPinned) { Top = Math.Max(wa.Top, wa.Bottom - Height); _topPinned = true; }
 
 
 
@@ -5781,9 +5865,6 @@ if (_hits.Count == 0) return;
 _hoverRow = -1;
 
 
-HideTip();
-
-
 
  // 键盘/滚轮一动，鼠标停的那条就不是他看的那条了
 
@@ -5791,10 +5872,10 @@ HideTip();
 _sel += d;
 
 
-if (_sel < 0) _sel = _hits.Count - 1;
+if (_sel < 0) _sel = 0;
 
 
-if (_sel >= _hits.Count) _sel = 0;
+if (_sel >= _hits.Count) _sel = _hits.Count - 1;
 
 
 EnsureVisible();
@@ -5838,6 +5919,8 @@ if (_top > maxTop) _top = maxTop;
 
 if (_top < 0) _top = 0;
 
+ SyncTipToSelection();
+
 }
 
  // 鼠标滚轮：一格一条，走同一套 MoveSel，保证两端行为一致
@@ -5849,8 +5932,32 @@ private void WheelSel(int delta)
 
 if (!Visible || !IsFileMode() || _hits.Count <= 1) return;
 
+ _hoverGuard = Environment.TickCount;
 
-MoveSel(delta > 0 ? -1 : 1);
+
+_wheelAcc += delta;
+  int steps = _wheelAcc / 120;
+  _wheelAcc -= steps * 120;
+  Log("wheel delta=" + delta + " acc=" + _wheelAcc + " steps=" + steps);
+  if (steps == 0) return;
+ 
+ if (steps > 3) steps = 3;
+  if (steps < -3) steps = -3;
+   // 滚轮滚的是「列表窗口」本身：一格 = 整张列表挪一行（选中项跟着走），
+  // 而不是只挪高亮。以前窗口要攒够 4 格才动，手感就是「滚了没反应 / 只有用力才动」。
+  int dir = -steps;                 // 正 = 向上
+  int n = _hits.Count;
+  int maxTop = n - MAX_ROWS; if (maxTop < 0) maxTop = 0;
+  _top += dir;
+  if (_top < 0) _top = 0;
+  if (_top > maxTop) _top = maxTop;
+  _sel += dir;
+  if (_sel < _top) _sel = _top;
+  if (_sel > _top + MAX_ROWS - 1) _sel = _top + MAX_ROWS - 1;
+  if (_sel > n - 1) _sel = n - 1;
+  SyncTipToSelection();
+  Log("wheel delta=" + delta + " steps=" + steps + " sel=" + _sel + " top=" + _top + " n=" + n);
+  Refresh();
 
 }
 
@@ -5899,40 +6006,24 @@ base.OnMouseMove(e);
 int idx = (Visible && IsFileMode()) ? RowIndexAt(e.Y) : -1;
 
 
-if (idx == _hoverRow) return;
+if (Environment.TickCount - _hoverGuard < 250) return;
 
+ if (idx == _hoverRow) return;
 
-_hoverRow = idx;
+ _hoverRow = idx;
 
+ // 悬停的作用只有两个：高亮这一行、决定右键菜单作用在哪一行。
+ // 详情面板跟着选中项走，所以悬停要同时把选中项挪过去 —— 不等待、不闪烁。
+ if (idx >= 0 && idx != _sel)
+ {
+  _sel = idx;
+  EnsureVisible();
+  SyncTipToSelection();
+  Refresh();
+ }
+ return;
 
-HideTip();
-
-
-
-
-
-
-
-  // 换了行就先撤掉旧的，别停在别人的信息上
-
-
-if (_hoverTimer != null)
-
-
-{
-
-
-
-_hoverTimer.Stop();
-
-
-
-if (idx >= 0) _hoverTimer.Start();
-
-
-}
-
-}
+ }
 
  protected override void OnMouseLeave(EventArgs e)
 
@@ -5946,9 +6037,6 @@ _hoverRow = -1;
 
 
 if (_hoverTimer != null) _hoverTimer.Stop();
-
-
-HideTip();
 
 }
 
@@ -6006,9 +6094,6 @@ _hoverRow = -1;
 
 
 if (_hoverTimer != null) _hoverTimer.Stop();
-
-
-HideTip();
 
 
 Refresh();
@@ -6458,6 +6543,44 @@ e.Graphics.DrawRectangle(p, 0, 0, e.ToolStrip.Width - 1, e.ToolStrip.Height - 1)
 }
 
 }
+
+ // 详情面板跟着选中项：一直显示，不需要悬停等待。
+ private bool _tipSync = false;
+
+ private bool _topPinned = false;
+
+ private int _hoverGuard = 0;  // 滚轮/键盘刚动过时，忽略合成出来的鼠标移动
+
+ private void SyncTipToSelection()
+ {
+  if (_tipSync) return;
+  if (!Visible || !IsFileMode() || _hits.Count == 0 || _sel < 0 || _sel >= _hits.Count)
+  {
+   if (_tipRow >= 0) HideTip();
+   return;
+  }
+  if (_tipRow == _sel && _tipH > 0) return;
+
+  _tipSync = true;
+  try
+  {
+   FileHit h = _hits[_sel];
+   _tipName = h.Name;
+   _tipPath = h.FullPath;
+   _tipMeta = MetaFor(h);
+   _tipRow = _sel;
+   using (Graphics g = CreateGraphics())
+   {
+    CalcTipPathLines(g);
+    _tipH = TipHeight(g);
+   }
+  }
+  catch { }
+  finally { _tipSync = false; }
+
+  ApplyHeight();
+  Refresh();
+ }
 
  private void ShowTipForHover()
 
@@ -7135,9 +7258,6 @@ base.OnMouseDown(e);
 
 
 _hoverRow = -1;
-
-
-HideTip();
 
 
 if (e.Button == MouseButtons.Left)
@@ -8189,6 +8309,10 @@ if (k == Keys.Down) { MoveSel(1); return true; }
 
 
 if (k == Keys.Up) { MoveSel(-1); return true; }
+ if (k == Keys.Home) { MoveSel(-_hits.Count); return true; }
+ if (k == Keys.End) { MoveSel(_hits.Count); return true; }
+ if (k == Keys.PageDown) { MoveSel(MAX_ROWS); return true; }
+ if (k == Keys.PageUp) { MoveSel(-MAX_ROWS); return true; }
 
 
 
@@ -8928,6 +9052,22 @@ ShowInput();
 
 }
 
+  // 滚轮路由：浮层开着且在文件模式时，WM_MOUSEWHEEL 在分发前就截住，
+ // 不必依赖焦点在谁身上（输入框是 multiline TextBox，会把滚轮吃掉）。
+ private sealed class WheelRouter : IMessageFilter
+ {
+  private readonly InputForm _f;
+  public WheelRouter(InputForm f) { _f = f; }
+  public bool PreFilterMessage(ref Message m)
+  {
+   if (m.Msg != 0x020A) return false;       // WM_MOUSEWHEEL
+   if (!_f.Visible || !_f.IsFileMode()) return false;
+   int delta = (short)((long)m.WParam >> 16);
+   _f.WheelSel(delta);
+   return true;
+  }
+ }
+
  private void ShowInput()
 
 {
@@ -8949,6 +9089,8 @@ targetTitle = sb.ToString();
 
 
 Log("ShowInput  target=" + targetWindow + "  title=" + targetTitle);
+
+ _topPinned = false;
 
 
 

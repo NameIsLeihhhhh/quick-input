@@ -136,7 +136,7 @@ $h2 = if ($m2.Success) { [int]$m2.Groups[1].Value } else { 0 }
 $sel = if ($m2.Success) { [int]$m2.Groups[2].Value } else { -1 }
 $top = if ($m2.Success) { [int]$m2.Groups[3].Value } else { -1 }
 if ($h2 -ge 9) {
-    T '选中项能到第 9 条' (($sel -eq 8) -and ($top -ge 5)) ("sel=$sel top=$top（共 $h2 条）")
+    T '选中项能到第 9 条' (($sel -eq 8) -and ($top -ge 4)) ("sel=$sel top=$top（共 $h2 条）")
 } else {
     Write-Host ("  跳过：结果只有 $h2 条，凑不出第 9 条") -ForegroundColor Yellow
 }

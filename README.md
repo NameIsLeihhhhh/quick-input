@@ -252,3 +252,30 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1
 用的是 Windows 自带的 .NET Framework 编译器，不用装任何东西。`build.ps1` 里带 `QuickInput.ico` 的 `resource` 和 `win32icon` 两个参数，别删——删了托盘图标会退回系统默认那个白纸图标。
 
 > 改过扩展代码后，需要到 `chrome://extensions` 点一次刷新图标才会生效——浏览器不会自动重载扩展。
+
+---
+
+## v2 更新（2026-10-22）
+
+**搜索作用域**
+
+- 查询自动加 `file:` 前缀，只出文件 —— 文件夹不再占位（以前搜 /index、/config、/2026 时 19 条全是文件夹）
+- 追加 20 条路径排除：Windows / ProgramData / AppData / node_modules / Program Files / .git / site-packages / __pycache__ / venv / .nuget / .gradle / dist / build / obj / .obsidian\plugins / 回收站 等
+- 清单在 `Everything.ScopeExclude()`，可自行增删
+- 作用域查询一条都没有时自动退回原查询 —— 只匹配文件夹的词仍然搜得到
+
+**结果数与排序**
+
+- 上限 19 → 200（实测 19 条 vs 200 条耗时 6.0 vs 6.6 ms）
+- 先取 600 条，按**最近修改时间**倒序，再取前 200
+- 可见行数 4 → **5 行**（含详情面板窗口高 928 px）
+
+**键盘**
+
+- 新增 Home / End / PageUp / PageDown
+
+**修掉的毛病**
+
+- 右键菜单不再把常驻详情面板藏掉
+- 滚轮／键盘动过之后 250 ms 内忽略鼠标悬停，避免选中项被抢回去
+- 清掉 `CS0162` 死代码，编译零警告
