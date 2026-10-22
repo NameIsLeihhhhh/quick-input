@@ -18,7 +18,7 @@ Write-Host "编译器: $csc"
 Write-Host '正在编译...'
 
 & $csc /nologo /target:winexe /out:QuickInput.exe /optimize+ /codepage:65001 `
-    src\QuickInput.cs `
+    QuickInput.cs `
     /resource:QuickInput.ico /win32icon:QuickInput.ico `
     /r:System.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll
 

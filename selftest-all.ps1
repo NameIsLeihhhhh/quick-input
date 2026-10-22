@@ -32,8 +32,9 @@ if ($null -eq $h) {
 }
 T '桥在线' ($h.ok -eq $true) ("pending=" + $h.pending)
 T '浏览器扩展已连接' ($h.connected -eq $true) ("client=" + $h.client)
-if ($h.client -ne '4') {
-    Write-Host '  提示：扩展版本不是 4，去 chrome://extensions 点一次刷新图标。' -ForegroundColor Yellow
+T '扩展版本是 5' ($h.client -eq '5') ("client=" + $h.client)
+if ($h.client -ne '5') {
+    Write-Host '  提示：扩展版本不是 5，去 chrome://extensions 点一次刷新图标（附件功能需要 v5）。' -ForegroundColor Yellow
 }
 
 Write-Host ''
@@ -96,6 +97,30 @@ T '投递到 DSH' $delivered ("delivered=" + $hf.delivered)
 if ($hf.lastError -ne '') {
     Write-Host ("  最近一次错误：" + $hf.lastError) -ForegroundColor Yellow
 }
+
+Write-Host ''
+Write-Host '=== 6.5 附件端到端（会再建一个会话，带一个附件）===' -ForegroundColor Cyan
+$attDir = Join-Path $env:USERPROFILE '.dsh\attachments\v1\file-objects'
+$cntBefore = if (Test-Path $attDir) { (Get-ChildItem $attDir -Recurse -File | Measure-Object).Count } else { -1 }
+$probeName = 'selftest-' + (Get-Date -Format 'HHmmss') + '.txt'
+# DSH 按内容哈希去重：载荷必须每次都不同，否则第二轮不新增对象，用例会误报。
+$stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
+$b64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('quickinput selftest attachment ' + $stamp))
+$line = 'file=' + [uri]::EscapeDataString($probeName) + '|text/plain|' + $b64
+$lb = [System.Text.Encoding]::UTF8.GetBytes($line)
+Invoke-WebRequest -Uri ($base + '/attach') -Method Post -Body $lb -ContentType 'text/plain; charset=utf-8' -UseBasicParsing | Out-Null
+$before2 = (Get2 '/health' | ConvertFrom-Json).delivered
+$body2 = [System.Text.Encoding]::UTF8.GetBytes('QuickInput 附件自测 ' + (Get-Date -Format 'HH:mm:ss'))
+Invoke-WebRequest -Uri ($base + '/push?mode=new') -Method Post -Body $body2 -ContentType 'text/plain; charset=utf-8' -UseBasicParsing | Out-Null
+$sent2 = $false
+for ($i = 0; $i -lt 24; $i++) {
+    Start-Sleep -Milliseconds 500
+    $hh = Get2 '/health' | ConvertFrom-Json
+    if ($hh.pending -eq 0) { if ($hh.delivered -gt $before2) { $sent2 = $true }; break }
+}
+$cntAfter = if (Test-Path $attDir) { (Get-ChildItem $attDir -Recurse -File | Measure-Object).Count } else { -1 }
+T '带附件的一条发出去了' $sent2 ("delivered=" + $sent2)
+T '附件真的落进了 DSH' ($cntAfter -gt $cntBefore) ("file-objects " + $cntBefore + " -> " + $cntAfter)
 
 Write-Host ''
 Write-Host '=== 7. 文件搜索 / 列表滚动 ===' -ForegroundColor Cyan
